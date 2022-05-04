@@ -8,10 +8,8 @@
 #include <netdb.h>
 using namespace std;
 
-
 #define DONE "done"
 #define ENQUIRY "enquiry"
-
 
 #define REQUEST "request"
 #define REPLY "reply"
@@ -20,24 +18,30 @@ using namespace std;
 #define FAILED "failed"
 #define RELEASE "release"
 
+#define COMREQ "commitrequest"
+#define AGREED "agreed"
+#define ABORT "abort"
+#define FINALABORT "finalabort"
+#define COMMIT "commit"
+
 #define PORT 11111 //defining temporary port
 #define SA struct sockaddr
 #define MAX 256
 
-void startServer(int& serverSocket)
+void startServer(int &serverSocket)
 {
 	struct sockaddr_in servaddr;
-    
-    //creating a socket
+
+	//creating a socket
 	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(serverSocket == -1)
+	if (serverSocket == -1)
 	{
-			printf("\nCouldnt create socket");
-			exit(0);
+		printf("\nCouldnt create socket");
+		exit(0);
 	}
 	else
 	{
-			//printf("\nSocket creation successful");
+		//printf("\nSocket creation successful");
 	}
 
 	bzero(&servaddr, sizeof(servaddr));
@@ -45,9 +49,9 @@ void startServer(int& serverSocket)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(PORT);
-	
+
 	//binding server to socket
-	if((bind(serverSocket, (SA*)&servaddr, sizeof(servaddr)) != 0))
+	if ((bind(serverSocket, (SA *)&servaddr, sizeof(servaddr)) != 0))
 	{
 		printf("\nSocket bind failed");
 		exit(0);
@@ -58,7 +62,7 @@ void startServer(int& serverSocket)
 	}
 }
 
-void connServer(int& fileD, const char *ip, int port)
+void connServer(int &fileD, const char *ip, int port)
 {
 	struct sockaddr_in servaddr;
 	cout << "\nDeets: " << ip << " " << port << endl;

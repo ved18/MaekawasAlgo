@@ -25,13 +25,6 @@ void sockListenClient(int serverSocket)
     struct sockaddr_in cliaddr;
     socklen_t len = sizeof(cliaddr);
 
-    // listening on the socket
-    if (listen(serverSocket, 5) != 0)
-    {
-        cout << "\nListen failed";
-        exit(0);
-    }
-
     // accepting requests from another client
     clientSocket = accept(serverSocket, (SA *)&cliaddr, &len);
     if (clientSocket < 0)
@@ -65,6 +58,36 @@ void sockListenClient(int serverSocket)
             sendList.join();
             send(clientSocket, DONE, MAX, 0);
         }
+        else if(!strcmp(request, COMREQ))
+        {
+            char fileName[MAX];
+            if(read(clientSocket, fileName, MAX) != -1)
+            {
+                if(!strcmp(fileName, "TestFile4"))
+                {
+                    if(send(clientSocket, ABORT, MAX, 0) != -1)
+                    {
+                        cout<<"\nSent abort to write."<<endl;
+                    }
+                }
+                else
+                {
+                    if(send(clientSocket, AGREED, MAX, 0) != -1)
+                    {
+                        cout<<"\nSent agreed to write."<<endl;
+                    }
+                }
+                    
+            }
+        }
+        else if(!strcmp(request, FINALABORT))
+        {
+            cout<<"\nReceived abort from client."<<endl;
+        }
+        else if(!strcmp(request, COMMIT))
+        {
+                cout<<"\nReceived commit from the client"<<endl;
+        }
         else
         {
             exit(0);
@@ -78,6 +101,13 @@ int main()
 	int serverSocket;	//file descriptors
     startServer(serverSocket);
   
+    // listening on the socket
+    if (listen(serverSocket, 10) != 0)
+    {
+        cout << "\nListen failed";
+        exit(0);
+    }
+    
     // clientThreads
     thread clientThread[7];
 	
