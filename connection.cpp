@@ -13,7 +13,7 @@ using namespace std;
 
 #define REQUEST "request"
 #define REPLY "reply"
-#define YEILD "yeild"
+#define YIELD "yield"
 #define INQUIRE "inquire"
 #define FAILED "failed"
 #define RELEASE "release"
