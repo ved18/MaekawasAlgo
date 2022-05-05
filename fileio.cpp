@@ -10,16 +10,31 @@ void tempWrite(int clientId, char timeStamp[], char fileName[])
 
     this_thread::sleep_for(chrono::milliseconds(5000));
     ofstream f;
-    f.open(fileName, std::ios_base::app);
 
-    if (f.is_open())
+    for(int i=0; i<3; i++)
     {
-        f << "Client ID: " << clientId << "\nWrite Time: " << timeStamp << endl;
-    }
-    else
-    {
-        cout << "\nCould not open the file" << endl;
-    }
+        char dir[MAX];
+        if(i == 0)
+            memcpy(dir, FS1, sizeof(FS1));
+        else if(i == 1)
+            memcpy(dir, FS2, sizeof(FS2));
+        else if(i == 2)
+            memcpy(dir, FS3, sizeof(FS3));
+        
+        strcat(dir, fileName);
 
-    f.close();
+        f.open(dir, std::ios_base::app);
+
+        if (f.is_open())
+        {
+            f << "Client ID: " << clientId << "\nWrite Time: " << timeStamp << endl;
+        }
+        else
+        {
+            cout << "\nCould not open the file" << endl;
+        }
+
+        f.close();
+    }
+    
 }

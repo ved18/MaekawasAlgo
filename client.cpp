@@ -7,6 +7,7 @@ using namespace std;
 #define F2 "TestFile2"
 #define F3 "TestFile3"
 
+char* requestTime = new char[MAX];
 static int clientId;
 static int server1, server2, server3;
 char *charClientId;
@@ -191,12 +192,7 @@ void serverReply(int id, bool decision, char fileName[MAX])
     {
         if(send(socketFd, COMMIT, MAX, 0) != -1)
         {
-            cout<<"\nSent commit to server."<<endl;
-            time_t now = time(0);
-            // convert now to string form
-            char *timeStamp = new char[MAX];
-            timeStamp = ctime(&now);
-            tempWrite(clientId, timeStamp, fileName);
+            cout<<"\nSent commit to server."<<endl;            
         }
     }
     else
@@ -249,6 +245,7 @@ void writeFile()
                 cout<<"\nAll servers ready to commit. Sending commit message."<<endl;
                 for(int i=0; i<3; i++)
                     serverRep[i] = thread(serverReply , i, true, filename);
+                tempWrite(clientId, requestTime, filename);
             }
             else
             {
@@ -291,9 +288,13 @@ void mainFunc(int clientSocket)
             break;
 
         case 2:
+        {
+            time_t now = time(0);
+            // convert now to string form
+            requestTime = ctime(&now);
             writeFile();
             break;
-
+        }
         case 3:
             send(clientSocket, DONE, MAX, 0);
             break;
@@ -443,6 +444,8 @@ void serverListen(int socketFd, int id)
                         {
                             if (send(socketFd, fileName, MAX, 0) > 0)
                             {
+                                //set reply to false since giving reply back
+                                receivedReply[{socketFd, fileno}] = false;
                                 yeildSent[{socketFd, fileno}] = true;
                                 cout << "\nSent yeild to the client." << endl;
                             }
@@ -617,7 +620,7 @@ int main(int argc, char **argv)
     }
 
     //starting thread for the main function after connecting to the server.
-    thread clientThread(mainFunc, clientSocket);
+    thread clientThread(mainFunc, server1);
     clientThread.join();
 
     //closing the connection to server
