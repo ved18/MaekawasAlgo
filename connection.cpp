@@ -13,7 +13,7 @@ using namespace std;
 
 #define REQUEST "request"
 #define REPLY "reply"
-#define YEILD "yeild"
+#define YIELD "yield"
 #define INQUIRE "inquire"
 #define FAILED "failed"
 #define RELEASE "release"
@@ -65,7 +65,7 @@ void startServer(int &serverSocket)
 void connServer(int &fileD, const char *ip, int port)
 {
 	struct sockaddr_in servaddr;
-	cout << "\nDeets: " << ip << " " << port << endl;
+	// cout << "\nDeets: " << ip << " " << port << endl;
 	// creating socket
 	fileD = socket(AF_INET, SOCK_STREAM, 0);
 	if (fileD == -1)

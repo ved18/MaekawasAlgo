@@ -7,6 +7,8 @@ using namespace std;
 #define F2 "TestFile2"
 #define F3 "TestFile3"
 
+static int hasRequested = false;
+
 char* requestTime = new char[MAX];
 static int clientId;
 static int server1, server2, server3;
@@ -48,7 +50,7 @@ static unordered_map<int, bool> failed;
 
 static priority_queue<defReplyData, vector<defReplyData>, compareTS> deferredreply[3];
 
-static map<pair<int, int>, bool> yeildSent;
+static map<pair<int, int>, bool> yieldSent;
 
 const vector<string> ips{"10.176.69.33", "10.176.69.34", "10.176.69.35", "10.176.69.36", "10.176.69.37"};
 
@@ -102,12 +104,18 @@ void sendRequest(int id, char filename[])
     *temp = lampClock;
 
     // cout << "\nDebug Here to send request to client id: " << id << " on socket fd: " << mp[id] << endl;
+    
+    //adding sleep here if client id is 2. This is to check yield messages.
+    if(clientId == 2 and id == 4)
+        sleep(1);
+
     if (send(mp[id], REQUEST, MAX, 0) != -1)
     {
         if (send(mp[id], filename, MAX, 0) != -1)
         {
             if (send(mp[id], temp, sizeof(temp), 0) != -1)
             {
+                hasRequested = true;
                 cout << "\nSent request to client: " << id << " for file: " << filename << endl;
             }
         }
@@ -213,10 +221,20 @@ void writeFile()
     cin >> filename;
     int fileNo = getFileNo(filename);
 
+
+    
     //send request to quorom for replies.
     thread sendRequest1(sendRequest, (clientId + 1) % 5, filename);
     thread sendRequest2(sendRequest, (clientId + 2) % 5, filename);
 
+    if(Reply[fileNo].replySent)
+    {
+        if(Reply[fileNo].timeStamp < lampClock)
+        {
+            // cout<<"\nSetting falied to true since we have a higher priority request."<<endl;
+            failed[fileNo] = true;
+        }
+    }
     sendRequest1.join();
     sendRequest2.join();
 
@@ -225,7 +243,7 @@ void writeFile()
     int temp2 = (clientId + 2) % 5 ? (clientId + 2) % 5 : 5;
     while (true)
     {
-        if (receivedReply[{mp[temp1], fileNo}] and receivedReply[{mp[temp2], fileNo}])
+        if (receivedReply[{mp[temp1], fileNo}] and receivedReply[{mp[temp2], fileNo}] and !Reply[fileNo].replySent)
         {
             crExec[fileNo] = true;
             cout << "\nCool received required replies from quorom.\nStarting 2 phase commit protocol." << endl;
@@ -267,6 +285,7 @@ void writeFile()
     sendRelease1.join();
     sendRelease2.join();
 
+    hasRequested = false;
     crExec[fileNo] = false;
 }
 
@@ -275,6 +294,7 @@ void mainFunc(int clientSocket)
     int choice;
     while (true)
     {
+        failed[1] = true;
         cout << "\nPrinting all ids: " << endl;
         for (auto &i : mp)
             cout << i.first << " " << i.second << endl;
@@ -349,17 +369,25 @@ void serverListen(int socketFd, int id)
                     //this is if reply has not been sent to another server in quorom.
                     //also check if currently I am not in critical section
 
-                    if (crExec[fileno])
+                    if (crExec[fileno] or hasRequested)
                     {
-                        cout<<"\n Debug already in critical section. add request to queue."<<endl;
-                        defReplyData dr;
-                        dr.timeStamp = *timeStamp;
-                        dr.clientFd = socketFd;
-                        deferredreply[fileno].push(dr);
+                        cout<<"\nAlready in critical section or has requested another client. add request to queue."<<endl;
+                        if (send(socketFd, FAILED, MAX, 0) != -1)
+                        {
+                            if (send(socketFd, fileName, MAX, 0) != -1)
+                            {
+                                defReplyData dr;
+                                dr.timeStamp = *timeStamp;
+                                dr.clientFd = socketFd;
+                                deferredreply[fileno].push(dr);
+                           }
+                        }
                     }
                     else if (!checkReplyData.replySent)
                     {
-                        cout << "\nDebug Sending reply to client." << endl;
+                        cout << "\nSending reply to client." << endl;
+                        if(clientId == 5)
+                            sleep(1);
                         if (send(socketFd, REPLY, MAX, 0) != -1)
                         {
                             if (send(socketFd, fileName, MAX, 0) != -1)
@@ -406,7 +434,7 @@ void serverListen(int socketFd, int id)
                             int inquireSocket = checkReplyData.clientFd;
                             if (send(inquireSocket, INQUIRE, MAX, 0) != -1)
                             {
-                                if (send(socketFd, fileName, MAX, 0) != -1)
+                                if (send(inquireSocket, fileName, MAX, 0) != -1)
                                 {
                                     cout << "\nSent inquire message to other client." << endl;
                                 }
@@ -423,7 +451,6 @@ void serverListen(int socketFd, int id)
             {
                 int fileno = getFileNo(fileName);
                 receivedReply[{socketFd, fileno}] = true;
-                failed[fileno] = false;
                 cout << "\nReceived reply from clientFd: " << socketFd << endl;
             }
         }
@@ -432,22 +459,23 @@ void serverListen(int socketFd, int id)
             if (read(socketFd, fileName, MAX) != -1)
             {
                 int fileno = getFileNo(fileName);
+                
                 if (!crExec[fileno])
                 {
                     //not executing critical section check the previous reply sent.
-                    //checking if yeild has been sent and if it has received a reply from it
-                    int check2 = yeildSent[{socketFd, fileno}] and !receivedReply[{socketFd, fileno}];
-
+                    //checking if yield has been sent and if it has received a reply from it
+                    int check2 = yieldSent[{socketFd, fileno}] and !receivedReply[{socketFd, fileno}];
+                    
                     if (failed[fileno] or check2)
                     {
-                        if (send(socketFd, YEILD, MAX, 0) > 0)
+                        if (send(socketFd, YIELD, MAX, 0) > 0)
                         {
                             if (send(socketFd, fileName, MAX, 0) > 0)
                             {
                                 //set reply to false since giving reply back
                                 receivedReply[{socketFd, fileno}] = false;
-                                yeildSent[{socketFd, fileno}] = true;
-                                cout << "\nSent yeild to the client." << endl;
+                                yieldSent[{socketFd, fileno}] = true;
+                                cout << "\nSent yield to the client." << endl;
                             }
                         }
                     }
@@ -463,7 +491,7 @@ void serverListen(int socketFd, int id)
                 failed[fileno] = true;
             }
         }
-        else if (!strcmp(request, YEILD))
+        else if (!strcmp(request, YIELD))
         {
             if (read(socketFd, fileName, MAX) != -1)
             {
@@ -482,7 +510,7 @@ void serverListen(int socketFd, int id)
 
                 if (send(dr.clientFd, REPLY, MAX, 0) > 0)
                 {
-                    if (send(socketFd, fileName, MAX, 0) > 0)
+                    if (send(dr.clientFd, fileName, MAX, 0) > 0)
                     {
                         replyData &checkReplyData = Reply[fileno];
 
@@ -490,7 +518,7 @@ void serverListen(int socketFd, int id)
                         checkReplyData.clientFd = socketFd;
                         checkReplyData.timeStamp = *timeStamp;
 
-                        cout << "\nSent reply on yeild to higher priority request." << endl;
+                        cout << "\nSent reply on yield to higher priority request." << endl;
                     }
                 }
             }
@@ -501,7 +529,7 @@ void serverListen(int socketFd, int id)
             if (read(socketFd, fileName, MAX) != -1)
             {
                 int fileno = getFileNo(fileName);
-
+                failed[fileno] = false;
                 replyData &checkReplyData = Reply[fileno];
                 checkReplyData.replySent = false;
                 checkReplyData.clientFd = -1;
@@ -558,7 +586,7 @@ void acceptClient(int serverSocket)
             int check = read(tempFd, tempid, MAX);
             if (check > 0)
             {
-                cout << "\nDebug: Received client id :" << tempid << endl;
+                // cout << "\nDebug: Received client id :" << tempid << endl;
                 tempIdint = stol(tempid);
                 mp[tempIdint] = tempFd;
                 startListening[i] = thread(serverListen, tempFd, tempIdint);
